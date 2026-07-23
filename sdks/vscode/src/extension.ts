@@ -134,6 +134,10 @@ export function activate(context: vscode.ExtensionContext) {
     }
     if (dataDir) terminalEnv["OPENCODE_DATA_DIR"] = dataDir
 
+    // Start opencode in the current workspace folder so it shows that project's
+    // sessions instead of defaulting to the home directory.
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+
     const terminal = vscode.window.createTerminal({
       name: TERMINAL_NAME,
       iconPath: {
@@ -144,6 +148,7 @@ export function activate(context: vscode.ExtensionContext) {
         viewColumn: vscode.ViewColumn.Beside,
         preserveFocus: false,
       },
+      cwd: workspaceFolder,
       env: terminalEnv,
     })
 
