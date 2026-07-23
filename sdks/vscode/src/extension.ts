@@ -19,6 +19,15 @@ import { openSseStream, type SseClient } from "./sse-client"
 const TERMINAL_NAME = "abxglia-opencode"
 const CONFIG_SECTION = "abxglia-opencode"
 
+// URL-safe base64 without padding, matching opencode's base64Encode in core/util/encode.ts.
+function base64EncodeUrlSafe(value: string): string {
+  return Buffer.from(value, "utf8")
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=/g, "")
+}
+
 // Reads a config value from the abxglia-opencode settings section.
 function config<T>(key: string, fallback: T): T {
   return vscode.workspace.getConfiguration(CONFIG_SECTION).get<T>(key, fallback)
@@ -160,10 +169,11 @@ export function activate(context: vscode.ExtensionContext) {
 
     if (connected) {
       // Open the web UI in a Cursor editor tab, passing the current workspace
-      // directory so it auto-opens the project instead of showing a picker.
+      // directory as a base64 path segment so it auto-opens the project.
+      // The web app routes directories as /:dir where dir is URL-safe base64.
       const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? ""
       const appUrl = workspaceFolder
-        ? `http://localhost:${port}/app?directory=${encodeURIComponent(workspaceFolder)}`
+        ? `http://localhost:${port}/app/${base64EncodeUrlSafe(workspaceFolder)}/session`
         : `http://localhost:${port}/app`
       await vscode.commands.executeCommand("simpleBrowser.show", appUrl)
       await activateIdeDiffReview(port, context)
