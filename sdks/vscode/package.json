@@ -1,12 +1,12 @@
 {
-  "name": "opencode",
-  "displayName": "opencode",
-  "description": "opencode for VS Code",
+  "name": "abxglia-opencode",
+  "displayName": "Abxglia OpenCode",
+  "description": "opencode for VS Code (abxglia dev fork)",
   "version": "1.18.4",
-  "publisher": "sst-dev",
+  "publisher": "abxglia",
   "repository": {
     "type": "git",
-    "url": "https://github.com/anomalyco/opencode"
+    "url": "https://github.com/abhi152003/opencode"
   },
   "license": "MIT",
   "icon": "images/icon.png",
@@ -25,63 +25,63 @@
   "contributes": {
     "commands": [
       {
-        "command": "opencode.openTerminal",
-        "title": "Open opencode",
+        "command": "abxglia-opencode.openTerminal",
+        "title": "Abxglia: Open opencode",
         "icon": {
           "light": "images/button-dark.svg",
           "dark": "images/button-light.svg"
         }
       },
       {
-        "command": "opencode.openNewTerminal",
-        "title": "Open opencode in new tab",
+        "command": "abxglia-opencode.openNewTerminal",
+        "title": "Abxglia: Open opencode in new tab",
         "icon": {
           "light": "images/button-dark.svg",
           "dark": "images/button-light.svg"
         }
       },
       {
-        "command": "opencode.addFilepathToTerminal",
-        "title": "Add Filepath to Terminal"
+        "command": "abxglia-opencode.addFilepathToTerminal",
+        "title": "Abxglia: Add Filepath to Terminal"
       },
       {
-        "command": "opencode.acceptChange",
-        "title": "opencode: Accept Change",
+        "command": "abxglia-opencode.acceptChange",
+        "title": "Abxglia: Accept Change",
         "icon": "$(check)"
       },
       {
-        "command": "opencode.acceptAlwaysChange",
-        "title": "opencode: Accept Change (Always)",
+        "command": "abxglia-opencode.acceptAlwaysChange",
+        "title": "Abxglia: Accept Change (Always)",
         "icon": "$(check-all)"
       },
       {
-        "command": "opencode.rejectChange",
-        "title": "opencode: Reject Change",
+        "command": "abxglia-opencode.rejectChange",
+        "title": "Abxglia: Reject Change",
         "icon": "$(close)"
       },
       {
-        "command": "opencode.rejectChangeWithFeedback",
-        "title": "opencode: Reject Change with Feedback"
+        "command": "abxglia-opencode.rejectChangeWithFeedback",
+        "title": "Abxglia: Reject Change with Feedback"
       }
     ],
     "menus": {
       "editor/title": [
         {
-          "command": "opencode.openNewTerminal",
+          "command": "abxglia-opencode.openNewTerminal",
           "group": "navigation"
         },
         {
-          "command": "opencode.acceptChange",
+          "command": "abxglia-opencode.acceptChange",
           "group": "navigation@1",
           "when": "resourceScheme == opencodediff"
         },
         {
-          "command": "opencode.acceptAlwaysChange",
+          "command": "abxglia-opencode.acceptAlwaysChange",
           "group": "navigation@2",
           "when": "resourceScheme == opencodediff"
         },
         {
-          "command": "opencode.rejectChange",
+          "command": "abxglia-opencode.rejectChange",
           "group": "navigation@3",
           "when": "resourceScheme == opencodediff"
         }
@@ -89,7 +89,7 @@
     },
     "keybindings": [
       {
-        "command": "opencode.openTerminal",
+        "command": "abxglia-opencode.openTerminal",
         "title": "Run opencode",
         "key": "cmd+escape",
         "mac": "cmd+escape",
@@ -97,7 +97,7 @@
         "linux": "ctrl+escape"
       },
       {
-        "command": "opencode.openNewTerminal",
+        "command": "abxglia-opencode.openNewTerminal",
         "title": "Run opencode",
         "key": "cmd+shift+escape",
         "mac": "cmd+shift+escape",
@@ -105,15 +105,15 @@
         "linux": "ctrl+shift+escape"
       },
       {
-        "command": "opencode.addFilepathToTerminal",
-        "title": "opencode: Insert At-Mentioned",
+        "command": "abxglia-opencode.addFilepathToTerminal",
+        "title": "Abxglia: Insert At-Mentioned",
         "key": "cmd+alt+k",
         "mac": "cmd+alt+k",
         "win": "ctrl+alt+K",
         "linux": "ctrl+alt+K"
       },
       {
-        "command": "opencode.acceptChange",
+        "command": "abxglia-opencode.acceptChange",
         "key": "cmd+enter",
         "mac": "cmd+enter",
         "win": "ctrl+enter",
@@ -121,7 +121,7 @@
         "when": "resourceScheme == opencodediff"
       },
       {
-        "command": "opencode.acceptAlwaysChange",
+        "command": "abxglia-opencode.acceptAlwaysChange",
         "key": "cmd+shift+enter",
         "mac": "cmd+shift+enter",
         "win": "ctrl+shift+enter",
@@ -129,7 +129,7 @@
         "when": "resourceScheme == opencodediff"
       },
       {
-        "command": "opencode.rejectChange",
+        "command": "abxglia-opencode.rejectChange",
         "key": "cmd+shift+backspace",
         "mac": "cmd+shift+backspace",
         "win": "ctrl+shift+backspace",
@@ -138,17 +138,22 @@
       }
     ],
     "configuration": {
-      "title": "opencode",
+      "title": "Abxglia OpenCode",
       "properties": {
-        "opencode.ideDiffReview": {
+        "abxglia-opencode.ideDiffReview": {
           "type": "boolean",
           "default": true,
           "description": "Show proposed file changes as a diff tab in the editor before they are written, with Accept/Reject controls."
         },
-        "opencode.path": {
+        "abxglia-opencode.path": {
           "type": "string",
           "default": "opencode",
           "description": "Path to the opencode binary. Override to point at a local dev build, e.g. \"bun run --cwd /path/to/opencode packages/opencode/src/index.ts\"."
+        },
+        "abxglia-opencode.dataDir": {
+          "type": "string",
+          "default": "",
+          "description": "Override the opencode data directory to isolate this dev fork from the released opencode. Set to e.g. \"~/.local/share/abxglia-opencode\". Maps to the OPENCODE_DATA_DIR env var."
         }
       }
     }
@@ -172,7 +177,7 @@
     "@types/node": "20.x",
     "@typescript-eslint/eslint-plugin": "^8.31.1",
     "@typescript-eslint/parser": "^8.31.1",
-    "eslint": "^9.25.1",
+    "eslint": "^8.57.1",
     "esbuild": "^0.25.3",
     "typescript": "^5.8.3",
     "@vscode/test-cli": "^0.0.11",

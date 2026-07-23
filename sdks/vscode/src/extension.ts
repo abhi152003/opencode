@@ -16,7 +16,13 @@ import {
 } from "./diff-provider"
 import { openSseStream, type SseClient } from "./sse-client"
 
-const TERMINAL_NAME = "opencode"
+const TERMINAL_NAME = "abxglia-opencode"
+const CONFIG_SECTION = "abxglia-opencode"
+
+// Reads a config value from the abxglia-opencode settings section.
+function config<T>(key: string, fallback: T): T {
+  return vscode.workspace.getConfiguration(CONFIG_SECTION).get<T>(key, fallback)
+}
 
 // Tracks one spawned opencode server: its port, the SSE subscription, and any
 // open diff tabs keyed by requestID so commands can resolve the right permission.
@@ -34,58 +40,67 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.workspace.registerTextDocumentContentProvider(DIFF_SCHEME, diffProvider),
   )
 
-  const openNewTerminalDisposable = vscode.commands.registerCommand("opencode.openNewTerminal", async () => {
-    await openTerminal()
-  })
+  const openNewTerminalDisposable = vscode.commands.registerCommand(
+    "abxglia-opencode.openNewTerminal",
+    async () => {
+      await openTerminal()
+    },
+  )
 
-  const openTerminalDisposable = vscode.commands.registerCommand("opencode.openTerminal", async () => {
-    // An opencode terminal already exists => focus it
-    const existingTerminal = vscode.window.terminals.find((t) => t.name === TERMINAL_NAME)
-    if (existingTerminal) {
-      existingTerminal.show()
-      return
-    }
+  const openTerminalDisposable = vscode.commands.registerCommand(
+    "abxglia-opencode.openTerminal",
+    async () => {
+      const existingTerminal = vscode.window.terminals.find((t) => t.name === TERMINAL_NAME)
+      if (existingTerminal) {
+        existingTerminal.show()
+        return
+      }
+      await openTerminal()
+    },
+  )
 
-    await openTerminal()
-  })
+  const addFilepathDisposable = vscode.commands.registerCommand(
+    "abxglia-opencode.addFilepathToTerminal",
+    async () => {
+      const fileRef = getActiveFile()
+      if (!fileRef) return
 
-  let addFilepathDisposable = vscode.commands.registerCommand("opencode.addFilepathToTerminal", async () => {
-    const fileRef = getActiveFile()
-    if (!fileRef) {
-      return
-    }
+      const terminal = vscode.window.activeTerminal
+      if (!terminal) return
 
-    const terminal = vscode.window.activeTerminal
-    if (!terminal) {
-      return
-    }
-
-    if (terminal.name === TERMINAL_NAME) {
-      // @ts-ignore
-      const port = terminal.creationOptions.env?.["_EXTENSION_OPENCODE_PORT"]
-      port ? await appendPrompt(parseInt(port), fileRef) : terminal.sendText(fileRef, false)
-      terminal.show()
-    }
-  })
+      if (terminal.name === TERMINAL_NAME) {
+        // @ts-ignore
+        const port = terminal.creationOptions.env?.["_EXTENSION_OPENCODE_PORT"]
+        port ? await appendPrompt(parseInt(port), fileRef) : terminal.sendText(fileRef, false)
+        terminal.show()
+      }
+    },
+  )
 
   // --- IDE diff review commands ---
-  const acceptChange = vscode.commands.registerCommand("opencode.acceptChange", async () => {
+  const acceptChange = vscode.commands.registerCommand("abxglia-opencode.acceptChange", async () => {
     await resolveFromActiveDiff("once")
   })
-  const acceptAlwaysChange = vscode.commands.registerCommand("opencode.acceptAlwaysChange", async () => {
-    await resolveFromActiveDiff("always")
-  })
-  const rejectChange = vscode.commands.registerCommand("opencode.rejectChange", async () => {
+  const acceptAlwaysChange = vscode.commands.registerCommand(
+    "abxglia-opencode.acceptAlwaysChange",
+    async () => {
+      await resolveFromActiveDiff("always")
+    },
+  )
+  const rejectChange = vscode.commands.registerCommand("abxglia-opencode.rejectChange", async () => {
     await resolveFromActiveDiff("reject")
   })
-  const rejectChangeWithFeedback = vscode.commands.registerCommand("opencode.rejectChangeWithFeedback", async () => {
-    const feedback = await vscode.window.showInputBox({
-      prompt: "Feedback to send back to the agent",
-      placeHolder: "What should the agent change?",
-    })
-    if (feedback === undefined) return
-    await resolveFromActiveDiff("reject", feedback)
-  })
+  const rejectChangeWithFeedback = vscode.commands.registerCommand(
+    "abxglia-opencode.rejectChangeWithFeedback",
+    async () => {
+      const feedback = await vscode.window.showInputBox({
+        prompt: "Feedback to send back to the agent",
+        placeHolder: "What should the agent change?",
+      })
+      if (feedback === undefined) return
+      await resolveFromActiveDiff("reject", feedback)
+    },
+  )
 
   context.subscriptions.push(
     openNewTerminalDisposable,
@@ -98,10 +113,18 @@ export function activate(context: vscode.ExtensionContext) {
   )
 
   async function openTerminal() {
-    // Create a new terminal in split screen
     const port = Math.floor(Math.random() * (65535 - 16384 + 1)) + 16384
-    // Allow pointing the extension at a dev build instead of the global binary.
-    const opencodePath = vscode.workspace.getConfiguration("opencode").get<string>("path") || "opencode"
+    const opencodePath = config<string>("path", "opencode")
+    const dataDir = config<string>("dataDir", "")
+
+    // Pass OPENCODE_DATA_DIR through the terminal env so the dev fork isolates
+    // its sessions/db from the released opencode.
+    const terminalEnv: Record<string, string> = {
+      _EXTENSION_OPENCODE_PORT: port.toString(),
+      OPENCODE_CALLER: "vscode",
+    }
+    if (dataDir) terminalEnv["OPENCODE_DATA_DIR"] = dataDir
+
     const terminal = vscode.window.createTerminal({
       name: TERMINAL_NAME,
       iconPath: {
@@ -112,10 +135,7 @@ export function activate(context: vscode.ExtensionContext) {
         viewColumn: vscode.ViewColumn.Beside,
         preserveFocus: false,
       },
-      env: {
-        _EXTENSION_OPENCODE_PORT: port.toString(),
-        OPENCODE_CALLER: "vscode",
-      },
+      env: terminalEnv,
     })
 
     terminal.show()
@@ -158,32 +178,23 @@ export function activate(context: vscode.ExtensionContext) {
 
   function getActiveFile() {
     const activeEditor = vscode.window.activeTextEditor
-    if (!activeEditor) {
-      return
-    }
+    if (!activeEditor) return
 
     const document = activeEditor.document
     const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri)
-    if (!workspaceFolder) {
-      return
-    }
+    if (!workspaceFolder) return
 
-    // Get the relative path from workspace root
     const relativePath = vscode.workspace.asRelativePath(document.uri)
     let filepathWithAt = `@${relativePath}`
 
-    // Check if there's a selection and add line numbers
     const selection = activeEditor.selection
     if (!selection.isEmpty) {
-      // Convert to 1-based line numbers
       const startLine = selection.start.line + 1
       const endLine = selection.end.line + 1
 
       if (startLine === endLine) {
-        // Single line selection
         filepathWithAt += `#L${startLine}`
       } else {
-        // Multi-line selection
         filepathWithAt += `#L${startLine}-${endLine}`
       }
     }
@@ -195,8 +206,7 @@ export function activate(context: vscode.ExtensionContext) {
 // Activate IDE diff review for a spawned server: tell the server we're
 // listening, subscribe to permission events, and open diff tabs.
 async function activateIdeDiffReview(port: number, context: vscode.ExtensionContext) {
-  const enabled = vscode.workspace.getConfiguration("opencode").get<boolean>("ideDiffReview", true)
-  if (!enabled) return
+  if (!config<boolean>("ideDiffReview", true)) return
 
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? ""
   try {
