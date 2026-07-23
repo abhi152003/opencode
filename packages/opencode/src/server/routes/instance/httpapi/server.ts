@@ -15,6 +15,7 @@ import { Env } from "@/env"
 import { EventV2Bridge } from "@/event-v2-bridge"
 import { Format } from "@/format"
 import { Git } from "@/git"
+import { IdeDiff } from "@/ide-diff"
 import { Installation } from "@/installation"
 import { LSP } from "@/lsp/lsp"
 import { MCP } from "@/mcp"
@@ -87,6 +88,7 @@ import { controlHandlers } from "./handlers/control"
 import { controlPlaneHandlers } from "./handlers/control-plane"
 import { experimentalHandlers } from "./handlers/experimental"
 import { fileHandlers } from "./handlers/file"
+import { ideDiffHandlers } from "./handlers/ide-diff"
 import { globalHandlers } from "./handlers/global"
 import { instanceHandlers } from "./handlers/instance"
 import { mcpHandlers } from "./handlers/mcp"
@@ -156,6 +158,7 @@ const instanceApiRoutes = HttpApiBuilder.layer(InstanceHttpApi).pipe(
     configHandlers,
     experimentalHandlers,
     fileHandlers,
+    ideDiffHandlers,
     instanceHandlers,
     mcpHandlers,
     projectHandlers,
@@ -230,6 +233,7 @@ const app = LayerNode.group([
   Discovery.node,
   Question.node,
   Permission.node,
+  IdeDiff.node,
   PermissionSaved.node,
   Todo.node,
   Session.node,

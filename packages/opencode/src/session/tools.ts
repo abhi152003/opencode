@@ -4,6 +4,7 @@ import { Provider } from "@/provider/provider"
 import { ProviderTransform } from "@/provider/transform"
 import { MCP } from "@/mcp"
 import { McpCatalog } from "@/mcp/catalog"
+import { IdeDiff } from "@/ide-diff"
 import { Permission } from "@/permission"
 import { Tool } from "@/tool/tool"
 import { ToolJsonSchema } from "@/tool/json-schema"
@@ -51,6 +52,7 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
   const run = yield* EffectBridge.make()
   const plugin = yield* Plugin.Service
   const permission = yield* Permission.Service
+  const ideDiff = yield* IdeDiff.Service
   const registry = yield* ToolRegistry.Service
   const mcp = yield* MCP.Service
   const truncate = yield* Truncate.Service
@@ -79,14 +81,30 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
         }
       }),
     ask: (req) =>
-      permission
-        .ask({
-          ...req,
-          sessionID: input.session.id,
-          tool: { messageID: input.processor.message.id, callID: options.toolCallId },
-          ruleset: Permission.merge(input.agent.permission, input.session.permission ?? []),
-        })
-        .pipe(Effect.orDie),
+      Effect.gen(function* () {
+        // When an IDE diff-review client is connected, force edit tools to ask
+        // for permission even when the agent ruleset allows them, so the
+        // proposed change can be shown in the IDE before it lands on disk.
+        // evaluate() uses findLast, so FORCE_ASK_EDIT must come after the
+        // agent/session rules to win. An "always" approved later in the same
+        // session still overrides this, so a single "Always allow" un-gates
+        // subsequent edits.
+        const forceAsk =
+          req.permission === "edit" && (yield* ideDiff.active())
+            ? Permission.fromConfig({ edit: { "*": "ask" } })
+            : []
+        return yield* permission
+          .ask({
+            ...req,
+            sessionID: input.session.id,
+            tool: { messageID: input.processor.message.id, callID: options.toolCallId },
+            ruleset: Permission.merge(
+              Permission.merge(input.agent.permission, input.session.permission ?? []),
+              forceAsk,
+            ),
+          })
+          .pipe(Effect.orDie)
+      }),
   })
 
   for (const item of yield* registry.tools({

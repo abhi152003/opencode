@@ -43,6 +43,25 @@
       {
         "command": "opencode.addFilepathToTerminal",
         "title": "Add Filepath to Terminal"
+      },
+      {
+        "command": "opencode.acceptChange",
+        "title": "opencode: Accept Change",
+        "icon": "$(check)"
+      },
+      {
+        "command": "opencode.acceptAlwaysChange",
+        "title": "opencode: Accept Change (Always)",
+        "icon": "$(check-all)"
+      },
+      {
+        "command": "opencode.rejectChange",
+        "title": "opencode: Reject Change",
+        "icon": "$(close)"
+      },
+      {
+        "command": "opencode.rejectChangeWithFeedback",
+        "title": "opencode: Reject Change with Feedback"
       }
     ],
     "menus": {
@@ -50,6 +69,21 @@
         {
           "command": "opencode.openNewTerminal",
           "group": "navigation"
+        },
+        {
+          "command": "opencode.acceptChange",
+          "group": "navigation@1",
+          "when": "resourceScheme == opencodediff"
+        },
+        {
+          "command": "opencode.acceptAlwaysChange",
+          "group": "navigation@2",
+          "when": "resourceScheme == opencodediff"
+        },
+        {
+          "command": "opencode.rejectChange",
+          "group": "navigation@3",
+          "when": "resourceScheme == opencodediff"
         }
       ]
     },
@@ -77,8 +111,42 @@
         "mac": "cmd+alt+k",
         "win": "ctrl+alt+K",
         "linux": "ctrl+alt+K"
+      },
+      {
+        "command": "opencode.acceptChange",
+        "key": "cmd+enter",
+        "mac": "cmd+enter",
+        "win": "ctrl+enter",
+        "linux": "ctrl+enter",
+        "when": "resourceScheme == opencodediff"
+      },
+      {
+        "command": "opencode.acceptAlwaysChange",
+        "key": "cmd+shift+enter",
+        "mac": "cmd+shift+enter",
+        "win": "ctrl+shift+enter",
+        "linux": "ctrl+shift+enter",
+        "when": "resourceScheme == opencodediff"
+      },
+      {
+        "command": "opencode.rejectChange",
+        "key": "cmd+shift+backspace",
+        "mac": "cmd+shift+backspace",
+        "win": "ctrl+shift+backspace",
+        "linux": "ctrl+shift+backspace",
+        "when": "resourceScheme == opencodediff"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "opencode",
+      "properties": {
+        "opencode.ideDiffReview": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show proposed file changes as a diff tab in the editor before they are written, with Accept/Reject controls."
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "bun run package",

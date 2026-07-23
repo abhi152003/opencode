@@ -2,10 +2,38 @@
 export function deactivate() {}
 
 import * as vscode from "vscode"
+import {
+  DIFF_SCHEME,
+  diffProvider,
+  diffUris,
+  nextToken,
+  setDiffContent,
+  applyPatch,
+  extractPendingFiles,
+  readFile,
+  baseName,
+  type PendingFile,
+} from "./diff-provider"
+import { openSseStream, type SseClient } from "./sse-client"
 
 const TERMINAL_NAME = "opencode"
 
+// Tracks one spawned opencode server: its port, the SSE subscription, and any
+// open diff tabs keyed by requestID so commands can resolve the right permission.
+interface OpencodeServer {
+  port: number
+  sse: SseClient | undefined
+  pendingDiffs: Map<string, vscode.Tab[]>
+}
+
+const servers = new Map<number, OpencodeServer>()
+
 export function activate(context: vscode.ExtensionContext) {
+  // Register the virtual-document provider for diff content.
+  context.subscriptions.push(
+    vscode.workspace.registerTextDocumentContentProvider(DIFF_SCHEME, diffProvider),
+  )
+
   const openNewTerminalDisposable = vscode.commands.registerCommand("opencode.openNewTerminal", async () => {
     await openTerminal()
   })
@@ -40,7 +68,34 @@ export function activate(context: vscode.ExtensionContext) {
     }
   })
 
-  context.subscriptions.push(openNewTerminalDisposable, openTerminalDisposable, addFilepathDisposable)
+  // --- IDE diff review commands ---
+  const acceptChange = vscode.commands.registerCommand("opencode.acceptChange", async () => {
+    await resolveFromActiveDiff("once")
+  })
+  const acceptAlwaysChange = vscode.commands.registerCommand("opencode.acceptAlwaysChange", async () => {
+    await resolveFromActiveDiff("always")
+  })
+  const rejectChange = vscode.commands.registerCommand("opencode.rejectChange", async () => {
+    await resolveFromActiveDiff("reject")
+  })
+  const rejectChangeWithFeedback = vscode.commands.registerCommand("opencode.rejectChangeWithFeedback", async () => {
+    const feedback = await vscode.window.showInputBox({
+      prompt: "Feedback to send back to the agent",
+      placeHolder: "What should the agent change?",
+    })
+    if (feedback === undefined) return
+    await resolveFromActiveDiff("reject", feedback)
+  })
+
+  context.subscriptions.push(
+    openNewTerminalDisposable,
+    openTerminalDisposable,
+    addFilepathDisposable,
+    acceptChange,
+    acceptAlwaysChange,
+    rejectChange,
+    rejectChangeWithFeedback,
+  )
 
   async function openTerminal() {
     // Create a new terminal in split screen
@@ -65,9 +120,6 @@ export function activate(context: vscode.ExtensionContext) {
     terminal.sendText(`opencode --port ${port}`)
 
     const fileRef = getActiveFile()
-    if (!fileRef) {
-      return
-    }
 
     // Wait for the terminal to be ready
     let tries = 10
@@ -83,10 +135,12 @@ export function activate(context: vscode.ExtensionContext) {
       tries--
     } while (tries > 0)
 
-    // If connected, append the prompt to the terminal
     if (connected) {
-      await appendPrompt(port, `In ${fileRef}`)
-      terminal.show()
+      await activateIdeDiffReview(port, context)
+      if (fileRef) {
+        await appendPrompt(port, `In ${fileRef}`)
+        terminal.show()
+      }
     }
   }
 
@@ -133,5 +187,125 @@ export function activate(context: vscode.ExtensionContext) {
     }
 
     return filepathWithAt
+  }
+}
+
+// Activate IDE diff review for a spawned server: tell the server we're
+// listening, subscribe to permission events, and open diff tabs.
+async function activateIdeDiffReview(port: number, context: vscode.ExtensionContext) {
+  const enabled = vscode.workspace.getConfiguration("opencode").get<boolean>("ideDiffReview", true)
+  if (!enabled) return
+
+  const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? ""
+  try {
+    await fetch(`http://localhost:${port}/ide-diff/activate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workspaceFolder }),
+    })
+  } catch {
+    // Server may be older than this feature; skip activation silently.
+    return
+  }
+
+  const server: OpencodeServer = { port, sse: undefined, pendingDiffs: new Map() }
+  servers.set(port, server)
+
+  const sseUrl = `http://localhost:${port}/event?directory=${encodeURIComponent(workspaceFolder)}`
+  server.sse = openSseStream(
+    sseUrl,
+    (event) => {
+      if (event.type === "permission.asked") {
+        void handlePermissionAsked(port, event.properties)
+      }
+    },
+    () => {
+      // On disconnect, attempt a single reconnect after a short delay.
+      setTimeout(() => {
+        if (servers.has(port)) void activateIdeDiffReview(port, context)
+      }, 3000)
+    },
+  )
+}
+
+async function handlePermissionAsked(port: number, properties: Record<string, unknown>) {
+  if (properties.permission !== "edit") return
+  const requestID = typeof properties.id === "string" ? properties.id : undefined
+  if (!requestID) return
+
+  const metadata = (properties.metadata ?? {}) as Record<string, unknown>
+  const pendingFiles = extractPendingFiles(metadata)
+  if (pendingFiles.length === 0) return
+
+  const token = nextToken()
+  const worktree = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? ""
+
+  for (const file of pendingFiles) {
+    await showDiffTab(port, token, file, worktree)
+  }
+
+  // Track the active tab so commands can resolve this request.
+  const activeTab = vscode.window.tabGroups.activeTabGroup.activeTab
+  if (activeTab) {
+    const server = servers.get(port)
+    if (server) server.pendingDiffs.set(requestID, [activeTab].filter(Boolean) as vscode.Tab[])
+  }
+}
+
+async function showDiffTab(port: number, token: number, file: PendingFile, worktree: string) {
+  const absolutePath = file.filePath.startsWith("/") ? file.filePath : `${worktree}/${file.filePath}`
+  const oldText = readFile(absolutePath)
+  const newText = applyPatch(oldText, file.patch)
+  if (newText === null) return
+
+  const { oldUri, newUri } = diffUris(token, file.filePath)
+  setDiffContent(oldUri, oldText)
+  setDiffContent(newUri, newText)
+
+  await vscode.commands.executeCommand(
+    "vscode.diff",
+    oldUri,
+    newUri,
+    `${baseName(file.filePath)} (opencode review)`,
+    { preview: false, viewColumn: vscode.ViewColumn.Active },
+  )
+}
+
+// Resolve the permission request associated with the currently-active diff tab.
+async function resolveFromActiveDiff(reply: "once" | "always" | "reject", message?: string) {
+  const activeTab = vscode.window.tabGroups.activeTabGroup.activeTab
+  if (!activeTab) return
+
+  // Find the requestID whose tracked tab is the active one.
+  let requestID: string | undefined
+  let port: number | undefined
+  for (const [p, server] of servers) {
+    for (const [id, tabs] of server.pendingDiffs) {
+      if (tabs.includes(activeTab)) {
+        requestID = id
+        port = p
+        break
+      }
+    }
+    if (requestID) break
+  }
+  if (!requestID || port === undefined) return
+
+  await fetch(`http://localhost:${port}/permission/${requestID}/reply`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ reply, ...(message ? { message } : {}) }),
+  })
+
+  // Close the diff tab(s) for this request.
+  const server = servers.get(port)
+  if (server) {
+    const tabs = server.pendingDiffs.get(requestID)
+    if (tabs) {
+      for (const tab of tabs) {
+        await vscode.window.tabGroups.close(tab)
+      }
+      server.pendingDiffs.delete(requestID)
+    }
   }
 }
