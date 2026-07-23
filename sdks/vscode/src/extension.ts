@@ -139,12 +139,13 @@ export function activate(context: vscode.ExtensionContext) {
     })
 
     terminal.show()
-    terminal.sendText(`${opencodePath} --port ${port}`)
-
-    const fileRef = getActiveFile()
+    // Launch in serve mode (HTTP server only) to avoid TUI rendering issues in
+    // integrated terminals. The web UI at localhost:PORT/app provides the chat
+    // interface; the IDE diff feature works identically over the HTTP API.
+    terminal.sendText(`${opencodePath} serve --port ${port}`)
 
     // Wait for the terminal to be ready
-    let tries = 10
+    let tries = 30
     let connected = false
     do {
       await new Promise((resolve) => setTimeout(resolve, 200))
@@ -158,11 +159,9 @@ export function activate(context: vscode.ExtensionContext) {
     } while (tries > 0)
 
     if (connected) {
+      // Open the web UI in a Cursor editor tab (simpleBrowser).
+      await vscode.commands.executeCommand("simpleBrowser.show", `http://localhost:${port}/app`)
       await activateIdeDiffReview(port, context)
-      if (fileRef) {
-        await appendPrompt(port, `In ${fileRef}`)
-        terminal.show()
-      }
     }
   }
 
