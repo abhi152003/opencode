@@ -131,6 +131,10 @@ export function activate(context: vscode.ExtensionContext) {
     const terminalEnv: Record<string, string> = {
       _EXTENSION_OPENCODE_PORT: port.toString(),
       OPENCODE_CALLER: "vscode",
+      // Share the same database as the released opencode instead of getting a
+      // channel-specific DB (opencode-<channel>.db). Without this, sessions,
+      // providers, and auth from the released opencode are invisible.
+      OPENCODE_DISABLE_CHANNEL_DB: "1",
     }
     if (dataDir) terminalEnv["OPENCODE_DATA_DIR"] = dataDir
 
