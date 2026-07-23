@@ -159,8 +159,13 @@ export function activate(context: vscode.ExtensionContext) {
     } while (tries > 0)
 
     if (connected) {
-      // Open the web UI in a Cursor editor tab (simpleBrowser).
-      await vscode.commands.executeCommand("simpleBrowser.show", `http://localhost:${port}/app`)
+      // Open the web UI in a Cursor editor tab, passing the current workspace
+      // directory so it auto-opens the project instead of showing a picker.
+      const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? ""
+      const appUrl = workspaceFolder
+        ? `http://localhost:${port}/app?directory=${encodeURIComponent(workspaceFolder)}`
+        : `http://localhost:${port}/app`
+      await vscode.commands.executeCommand("simpleBrowser.show", appUrl)
       await activateIdeDiffReview(port, context)
     }
   }
