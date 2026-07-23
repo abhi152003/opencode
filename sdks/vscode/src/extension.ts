@@ -148,10 +148,7 @@ export function activate(context: vscode.ExtensionContext) {
     })
 
     terminal.show()
-    // Launch in serve mode (HTTP server only) to avoid TUI rendering issues in
-    // integrated terminals. The web UI at localhost:PORT/app provides the chat
-    // interface; the IDE diff feature works identically over the HTTP API.
-    terminal.sendText(`${opencodePath} serve --port ${port}`)
+    terminal.sendText(`${opencodePath} --port ${port}`)
 
     // Wait for the terminal to be ready
     let tries = 30
@@ -168,14 +165,6 @@ export function activate(context: vscode.ExtensionContext) {
     } while (tries > 0)
 
     if (connected) {
-      // Open the web UI in a Cursor editor tab, passing the current workspace
-      // directory as a base64 path segment so it auto-opens the project.
-      // The web app routes directories as /:dir where dir is URL-safe base64.
-      const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? ""
-      const appUrl = workspaceFolder
-        ? `http://localhost:${port}/app/${base64EncodeUrlSafe(workspaceFolder)}/session`
-        : `http://localhost:${port}/app`
-      await vscode.commands.executeCommand("simpleBrowser.show", appUrl)
       await activateIdeDiffReview(port, context)
     }
   }
