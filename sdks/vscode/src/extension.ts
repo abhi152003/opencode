@@ -100,6 +100,8 @@ export function activate(context: vscode.ExtensionContext) {
   async function openTerminal() {
     // Create a new terminal in split screen
     const port = Math.floor(Math.random() * (65535 - 16384 + 1)) + 16384
+    // Allow pointing the extension at a dev build instead of the global binary.
+    const opencodePath = vscode.workspace.getConfiguration("opencode").get<string>("path") || "opencode"
     const terminal = vscode.window.createTerminal({
       name: TERMINAL_NAME,
       iconPath: {
@@ -117,7 +119,7 @@ export function activate(context: vscode.ExtensionContext) {
     })
 
     terminal.show()
-    terminal.sendText(`opencode --port ${port}`)
+    terminal.sendText(`${opencodePath} --port ${port}`)
 
     const fileRef = getActiveFile()
 

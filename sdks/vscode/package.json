@@ -144,6 +144,11 @@
           "type": "boolean",
           "default": true,
           "description": "Show proposed file changes as a diff tab in the editor before they are written, with Accept/Reject controls."
+        },
+        "opencode.path": {
+          "type": "string",
+          "default": "opencode",
+          "description": "Path to the opencode binary. Override to point at a local dev build, e.g. \"bun run --cwd /path/to/opencode packages/opencode/src/index.ts\"."
         }
       }
     }
